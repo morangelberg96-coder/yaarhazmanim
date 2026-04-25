@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>יער הזמנים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body {
+            overscroll-behavior-y: none; /* Prevents pull-to-refresh on mobile */
+            font-family: 'Varela Round', system-ui, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #050b14;
+        }
+
+        @keyframes floatOut {
+            0% { transform: translate(var(--start-x), 0) scale(0.1); opacity: 0; }
+            5% { opacity: 1; transform: translate(calc(var(--start-x) + (var(--end-x) * 0.05)), -5vh) scale(0.5); }
+            100% { transform: translate(var(--end-x), -120vh) scale(1.2); opacity: 0; } 
+        }
+
+        @keyframes pop {
+            0% { transform: translate(var(--current-x), var(--current-y)) scale(1); opacity: 1; filter: brightness(1); }
+            50% { transform: translate(var(--current-x), var(--current-y)) scale(1.5); opacity: 0.8; filter: brightness(2); }
+            100% { transform: translate(var(--current-x), var(--current-y)) scale(2); opacity: 0; filter: brightness(3); }
+        }
+
+        @keyframes floatScoreUp {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            20% { transform: translate(-50%, -100%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -300%) scale(1); opacity: 0; }
+        }
+
+        @keyframes comboPulse {
+            0%, 100% { transform: scale(1); text-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+            50% { transform: scale(1.1); text-shadow: 0 0 20px rgba(245, 158, 11, 1), 0 0 40px rgba(239, 68, 68, 0.8); }
+        }
+
+        @keyframes flutter {
+            0%, 100% { transform: rotate3d(0, 1, 0, 0deg) translateY(0px) rotate(-5deg); }
+            50% { transform: rotate3d(0, 1, 0, 35deg) translateY(-2px) rotate(-10deg); }
+        }
+
+        @keyframes floatButterfly {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(15px, -10px); }
+            50% { transform: translate(5px, -25px); }
+            75% { transform: translate(-10px, -15px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        @keyframes glowFirefly {
+            0%, 100% { opacity: 0.2; transform: scale(0.8) translate(0,0); }
+            50% { opacity: 1; transform: scale(1.2) translate(10px, -10px); }
+        }
+        
+        @keyframes pulseMushroom {
+            0%, 100% { filter: drop-shadow(0 0 5px rgba(168, 255, 181, 0.5)); }
+            50% { filter: drop-shadow(0 0 15px rgba(168, 255, 181, 0.9)); }
+        }
+
+        .bubble-anim {
+            animation-name: floatOut;
+            animation-timing-function: linear;
+            animation-fill-mode: forwards;
+        }
+        
+        .bubble-pop {
+            animation: pop 0.3s ease-out forwards;
+        }
+
+        .floating-score {
+            animation: floatScoreUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            pointer-events: none;
+            position: fixed;
+            z-index: 100;
+            font-weight: 900;
+            font-size: 2.5rem;
+            text-shadow: 0px 3px 0px rgba(0,0,0,0.8), 0px 0px 10px rgba(255,255,255,0.5);
+        }
+
+        .combo-active {
+            animation: comboPulse 0.5s infinite alternate;
+            color: #fbbf24;
+        }
+
+        .bubble-glass {
+            background: radial-gradient(110% 110% at 30% 30%, rgba(255, 255, 255, 0.9), var(--bubble-color) 40%, rgba(255, 255, 255, 0.4));
+            box-shadow: 
+            inset 15px 0 25px rgba(255,255,255,0.8), 
+            inset -5px 0 15px rgba(255,255,255,0.4), 
+            0 8px 20px rgba(0,0,0,0.15);
+            border: 1px solid rgba(255,255,255,0.95);
+            backdrop-filter: blur(3px);
+            border-radius: 50%;
+        }
+
+        .magic-forest-bg {
+            background: linear-gradient(to bottom, #050b14, #0d202e, #133333, #0f241c);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Global Background & Animations -->
+    <div class="fixed inset-0 pointer-events-none z-0 magic-forest-bg">
+        <svg class="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 1000">
+            <defs>
+                <radialGradient id="moonGlow" cx="50%" cy="30%" r="50%">
+                <stop offset="0%" stop-color="#1e3a5f" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#050b14" stop-opacity="0"/>
+                </radialGradient>
+            </defs>
+            <rect width="1000" height="1000" fill="url(#moonGlow)" />
+            <path d="M50 1000 L120 450 L190 1000 Z" fill="#091b24" />
+            <path d="M800 1000 L870 400 L940 1000 Z" fill="#091b24" />
+            <path d="M300 1000 L350 550 L400 1000 Z" fill="#091b24" opacity="0.8"/>
+            <path d="M600 1000 L650 500 L700 1000 Z" fill="#091b24" opacity="0.8"/>
+            <path d="M-50 1000 L80 250 L210 1000 Z" fill="#0d2826" />
+            <path d="M850 1000 L950 200 L1050 1000 Z" fill="#0d2826" />
+            <path d="M-100 1000 L20 100 L140 1000 Z" fill="#0a1f1a" />
+            <path d="M900 1000 L1000 50 L1100 1000 Z" fill="#0a1f1a" />
+            <path d="M0 900 Q 250 850 500 950 T 1000 850 L 1000 1000 L 0 1000 Z" fill="#07140f" />
+            <path d="M0 150 Q 150 250, 100 450 T 150 650" fill="none" stroke="#051414" stroke-width="12" stroke-linecap="round"/>
+            <path d="M1000 100 Q 850 200, 900 400 T 850 700" fill="none" stroke="#051414" stroke-width="15" stroke-linecap="round"/>
+            <g style="animation: pulseMushroom 4s infinite alternate">
+                <path d="M100 950 Q 110 920 120 950 Z" fill="#a8ffb5" />
+                <ellipse cx="110" cy="920" rx="15" ry="8" fill="#a8ffb5" />
+                <circle cx="105" cy="918" r="2" fill="#fff" />
+                <circle cx="115" cy="921" r="1.5" fill="#fff" />
+            </g>
+            <g style="animation: pulseMushroom 5s infinite alternate-reverse">
+                <path d="M880 960 Q 890 910 900 960 Z" fill="#a8e6ff" />
+                <ellipse cx="890" cy="910" rx="20" ry="10" fill="#a8e6ff" />
+                <circle cx="885" cy="908" r="3" fill="#fff" />
+                <circle cx="898" cy="912" r="2" fill="#fff" />
+            </g>
+        </svg>
+        <div id="fireflies-container" class="absolute inset-0 overflow-hidden"></div>
+        
+        <!-- Butterflies globally placed -->
+        <div id="butterflies-container">
+            <!-- Injected by JS -->
+        </div>
+    </div>
+
+    <!-- Mute Button (Global) -->
+    <button onclick="toggleMute()" id="mute-btn" class="absolute top-4 left-4 z-50 bg-slate-800/80 hover:bg-slate-700 text-3xl p-3 rounded-full border border-slate-600 shadow-lg transition" title="השתק">🔊</button>
+
+    <!-- VIEWS CONTAINER -->
+    <div class="relative z-10 w-full h-screen overflow-hidden">
+
+        <!-- MENU VIEW -->
+        <div id="menu-view" class="w-full h-full flex flex-col items-center justify-center p-4">
+            <div class="bg-slate-900/80 backdrop-blur-xl p-8 rounded-[40px] shadow-2xl w-full max-w-2xl border border-emerald-500/30 relative z-20">
+                <div class="text-center mb-8">
+                    <h1 class="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 mb-2 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">
+                        ✨ יער הזמנים ✨
+                    </h1>
+                    <h2 class="text-xl text-emerald-100 font-bold opacity-80">משחק פעלים בעבר, הווה ועתיד</h2>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-600/50 shadow-inner">
+                        <label class="block text-xl font-bold text-emerald-200 mb-4 text-center">בחרו מהירות:</label>
+                        <div class="flex gap-2">
+                            <button onclick="setSpeed('slow')" id="speed-slow" class="speed-btn flex-1 py-4 rounded-xl font-bold transition-all shadow-sm text-lg bg-slate-700 text-emerald-100 hover:bg-slate-600 border border-slate-600">רגוע 🍃</button>
+                            <button onclick="setSpeed('medium')" id="speed-medium" class="speed-btn flex-1 py-4 rounded-xl font-bold transition-all shadow-sm text-lg bg-emerald-500 text-slate-900 transform scale-105 shadow-[0_0_15px_rgba(16,185,129,0.5)]">בינוני 🦋</button>
+                            <button onclick="setSpeed('fast')" id="speed-fast" class="speed-btn flex-1 py-4 rounded-xl font-bold transition-all shadow-sm text-lg bg-slate-700 text-emerald-100 hover:bg-slate-600 border border-slate-600">סוער 🌪️</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-600/50 shadow-inner">
+                        <label class="block text-xl font-bold text-emerald-200 mb-3 text-center">זמן משחק:</label>
+                        <input type="range" min="1" max="5" value="3" id="duration-input" oninput="updateDurationLabel()" class="w-full h-4 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-emerald-500 mb-2" />
+                        <div id="duration-label" class="text-center font-black text-3xl mt-2 text-emerald-300">3 דקות</div>
+                    </div>
+
+                    <button onclick="startGame()" class="w-full bg-gradient-to-r from-green-400 to-emerald-400 hover:from-green-300 hover:to-emerald-300 text-slate-900 text-3xl font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transform transition hover:scale-[1.02] active:scale-95 mt-4 border-2 border-emerald-300/50">
+                        התחל קסם! 🧚‍♀️
+                    </button>
+                </div>
+            </div>
+            
+            <div class="absolute bottom-4 text-center text-emerald-300 text-sm md:text-base font-bold z-50 drop-shadow-md opacity-90">
+                יצרה באמצעות בינה מלאכותית: מורן קמיל גלברג, הוראה מותאמת.
+            </div>
+        </div>
+
+        <!-- PLAYING VIEW -->
+        <div id="playing-view" class="hidden w-full h-full flex-col relative z-20">
+            
+            <!-- HUD -->
+            <div class="w-full p-2 md:p-4 flex justify-between items-start pointer-events-none shrink-0 relative z-30">
+                
+                <div class="flex flex-col gap-2 mt-12 md:mt-0 pointer-events-auto">
+                    <div class="bg-slate-900/70 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-emerald-500/30">
+                        <div class="text-xl md:text-2xl font-black text-white drop-shadow-md">
+                            ניקוד: <span id="score-display" class="text-emerald-400">0</span>
+                        </div>
+                        <div id="time-display" class="text-sm md:text-lg font-bold text-emerald-100 mt-1 opacity-90">
+                            זמן: 0:00
+                        </div>
+                    </div>
+                    
+                    <div id="combo-display-container" class="hidden bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-amber-500/50 text-center shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                        <div id="combo-display" class="text-amber-400 font-black text-lg md:text-xl drop-shadow-md">
+                            רצף: x1 🔥
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/80 backdrop-blur-xl px-6 py-3 rounded-[30px] shadow-[0_0_30px_rgba(16,185,129,0.2)] border-2 border-emerald-500/50 text-center pointer-events-auto transform hover:scale-105 transition mx-2 max-w-[50%]">
+                    <div class="text-emerald-200 font-bold mb-0.5 text-sm md:text-base">חפשו פעלים בזמן:</div>
+                    <div id="target-display" class="text-3xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-emerald-300 drop-shadow-lg tracking-wide leading-none pb-1 break-words">
+                        --
+                    </div>
+                    
+                    <div class="w-full bg-slate-800 rounded-full h-3 mt-2 overflow-hidden border border-slate-700">
+                        <div id="target-bar" class="h-3 rounded-full transition-all duration-1000 bg-emerald-400" style="width: 100%; box-shadow: 0 0 10px rgba(255,255,255,0.5)"></div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 md:gap-3 pointer-events-auto mt-12 md:mt-0">
+                    <!-- Duplicate mute btn here if needed, but we have global -->
+                    <button onclick="stopGame(true)" class="bg-rose-600/80 hover:bg-rose-500 backdrop-blur text-white px-3 py-2 md:px-5 md:py-3 rounded-xl font-bold shadow-xl transition border border-rose-400/50 text-sm md:text-base">
+                        יציאה
+                    </button>
+                </div>
+            </div>
+
+            <!-- Floating Scores Container (Used globally by appending absolute elements to body) -->
+
+            <!-- Bubbles Area -->
+            <div id="bubbles-container" class="relative flex-1 w-full pointer-events-none overflow-hidden z-20"></div>
+
+            <!-- The Ginger Girl -->
+            <div class="absolute bottom-[-30px] left-1/2 transform -translate-x-1/2 z-30 pointer-events-none">
+                <svg viewBox="0 0 400 500" class="w-[300px] h-[375px] md:w-[400px] md:h-[500px] drop-shadow-2xl">
+                    <defs>
+                        <radialGradient id="wandGlow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+                            <stop offset="50%" stop-color="#a8e6ff" stop-opacity="0.6" />
+                            <stop offset="100%" stop-color="#a8e6ff" stop-opacity="0" />
+                        </radialGradient>
+                    </defs>
+                    <path d="M 170 250 Q 100 400 60 520 L 340 520 Q 300 400 230 250 Z" fill="#2a1b42" />
+                    <path d="M 180 250 Q 130 400 100 520 L 300 520 Q 270 400 220 250 Z" fill="#3f2b63" />
+                    <path d="M 188 230 L 212 230 L 214 270 L 186 270 Z" fill="#ffe4d6" />
+                    <path d="M 188 230 L 212 230 L 214 245 L 186 245 Z" fill="#ffb4a3" opacity="0.5" /> 
+                    <path d="M 160 200 Q 200 240 240 200 Z" fill="#a12c14" />
+                    <circle cx="200" cy="170" r="65" fill="#a12c14" />
+                    <g id="left-high-pigtail">
+                        <path d="M 145 135 C 90 20, 10 100, 50 240 C 70 190, 110 170, 145 135 Z" fill="#c44121" />
+                        <path d="M 145 135 C 100 30, 20 105, 55 230 C 75 185, 115 165, 145 135 Z" fill="#d94b28" />
+                        <path d="M 145 135 C 110 60, 40 115, 65 220 C 85 180, 120 160, 145 135 Z" fill="#eb6a49" />
+                        <circle cx="50" cy="240" r="14" fill="#c44121" />
+                        <circle cx="55" cy="230" r="12" fill="#d94b28" />
+                        <circle cx="65" cy="220" r="10" fill="#eb6a49" />
+                        <circle cx="45" cy="250" r="8" fill="#d94b28" />
+                    </g>
+                    <g id="right-high-pigtail">
+                        <path d="M 255 135 C 310 20, 390 100, 350 240 C 330 190, 290 170, 255 135 Z" fill="#c44121" />
+                        <path d="M 255 135 C 300 30, 380 105, 345 230 C 325 185, 285 165, 255 135 Z" fill="#d94b28" />
+                        <path d="M 255 135 C 290 60, 360 115, 335 220 C 315 180, 280 160, 255 135 Z" fill="#eb6a49" />
+                        <circle cx="350" cy="240" r="14" fill="#c44121" />
+                        <circle cx="345" cy="230" r="12" fill="#d94b28" />
+                        <circle cx="335" cy="220" r="10" fill="#eb6a49" />
+                        <circle cx="355" cy="250" r="8" fill="#d94b28" />
+                    </g>
+                    <ellipse cx="140" cy="190" rx="10" ry="14" fill="#ffe4d6" />
+                    <path d="M 137 185 Q 132 190 137 195" fill="none" stroke="#e0a394" stroke-width="1.5" stroke-linecap="round" />
+                    <ellipse cx="260" cy="190" rx="10" ry="14" fill="#ffe4d6" />
+                    <path d="M 263 185 Q 268 190 263 195" fill="none" stroke="#e0a394" stroke-width="1.5" stroke-linecap="round" />
+                    <ellipse cx="200" cy="190" rx="58" ry="62" fill="#ffe4d6" />
+                    <ellipse cx="165" cy="205" rx="14" ry="8" fill="#ffb4a3" opacity="0.45" />
+                    <ellipse cx="235" cy="205" rx="14" ry="8" fill="#ffb4a3" opacity="0.45" />
+                    <circle cx="162" cy="203" r="1.2" fill="#c47656" opacity="0.5"/>
+                    <circle cx="168" cy="206" r="1.5" fill="#c47656" opacity="0.4"/>
+                    <circle cx="158" cy="207" r="1" fill="#c47656" opacity="0.5"/>
+                    <circle cx="238" cy="203" r="1.2" fill="#c47656" opacity="0.5"/>
+                    <circle cx="232" cy="206" r="1.5" fill="#c47656" opacity="0.4"/>
+                    <circle cx="242" cy="207" r="1" fill="#c47656" opacity="0.5"/>
+                    <path d="M 197 198 Q 200 203 203 198" fill="none" stroke="#e0a394" stroke-width="2" stroke-linecap="round" />
+                    <ellipse cx="170" cy="180" rx="8" ry="10" fill="#542b1d" />
+                    <ellipse cx="230" cy="180" rx="8" ry="10" fill="#542b1d" />
+                    <circle cx="168" cy="177" r="3.5" fill="#ffffff" />
+                    <circle cx="172" cy="183" r="1.5" fill="#ffffff" />
+                    <circle cx="228" cy="177" r="3.5" fill="#ffffff" />
+                    <circle cx="232" cy="183" r="1.5" fill="#ffffff" />
+                    <path d="M 158 165 Q 168 155 178 162" fill="none" stroke="#b84523" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M 222 162 Q 232 155 242 165" fill="none" stroke="#b84523" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M 185 228 Q 200 240 215 228" fill="none" stroke="#d65a5a" stroke-width="2.5" stroke-linecap="round" />
+                    <circle cx="200" cy="216" r="4" fill="#f77e7e" />
+                    <circle cx="200" cy="216" r="1.5" fill="#521d1d" />
+                    <path d="M 200 135 Q 165 135 138 180 Q 130 155 145 135 Q 170 112 200 112 Z" fill="#c44121" />
+                    <path d="M 200 135 Q 235 135 262 180 Q 270 155 255 135 Q 230 112 200 112 Z" fill="#c44121" />
+                    <path d="M 200 135 Q 170 140 140 180 Q 135 155 145 135 Q 170 115 200 115 Z" fill="#d94b28" />
+                    <path d="M 200 135 Q 230 140 260 180 Q 265 155 255 135 Q 230 115 200 115 Z" fill="#d94b28" />
+                    <path d="M 200 115 L 200 135" fill="none" stroke="#ffe4d6" stroke-width="2.5" opacity="0.9" stroke-linecap="round" />
+                    <path d="M 145 135 Q 160 130 190 120" fill="none" stroke="#eb6a49" stroke-width="1.5" stroke-linecap="round" />
+                    <path d="M 145 135 Q 170 135 195 130" fill="none" stroke="#eb6a49" stroke-width="1.5" stroke-linecap="round" />
+                    <path d="M 145 135 Q 160 150 170 165" fill="none" stroke="#8a2310" stroke-width="1" stroke-linecap="round" />
+                    <path d="M 145 135 Q 150 160 145 175" fill="none" stroke="#8a2310" stroke-width="1" stroke-linecap="round" />
+                    <path d="M 255 135 Q 240 130 210 120" fill="none" stroke="#eb6a49" stroke-width="1.5" stroke-linecap="round" />
+                    <path d="M 255 135 Q 230 135 205 130" fill="none" stroke="#eb6a49" stroke-width="1.5" stroke-linecap="round" />
+                    <path d="M 255 135 Q 240 150 230 165" fill="none" stroke="#8a2310" stroke-width="1" stroke-linecap="round" />
+                    <path d="M 255 135 Q 250 160 255 175" fill="none" stroke="#8a2310" stroke-width="1" stroke-linecap="round" />
+                    <ellipse cx="145" cy="135" rx="8" ry="16" fill="#6ee7b7" transform="rotate(-40 145 135)" />
+                    <ellipse cx="255" cy="135" rx="8" ry="16" fill="#6ee7b7" transform="rotate(40 255 135)" />
+                    <path d="M 150 300 Q 160 380 175 420" fill="none" stroke="#3f2b63" stroke-width="18" stroke-linecap="round" />
+                    <path d="M 250 300 Q 240 380 210 320" fill="none" stroke="#2a1b42" stroke-width="18" stroke-linecap="round" />
+                    <circle cx="205" cy="315" r="9" fill="#ffe4d6" />
+                    <path d="M 200 370 L 200 245" fill="none" stroke="#cca300" stroke-width="5" stroke-linecap="round" />
+                    <path d="M 202 370 L 202 245" fill="none" stroke="#ffcc00" stroke-width="2" />
+                    <path d="M 195 308 Q 200 306 205 308" fill="none" stroke="#ffe4d6" stroke-width="4.5" stroke-linecap="round" />
+                    <path d="M 195 314 Q 200 312 205 314" fill="none" stroke="#ffe4d6" stroke-width="4.5" stroke-linecap="round" />
+                    <path d="M 195 320 Q 200 318 205 320" fill="none" stroke="#ffe4d6" stroke-width="4.5" stroke-linecap="round" />
+                    <path d="M 193 303 Q 198 301 202 304" fill="none" stroke="#ffe4d6" stroke-width="3.5" stroke-linecap="round" />
+                    <circle cx="200" cy="235" r="13" fill="none" stroke="#cca300" stroke-width="5" />
+                    <circle cx="200" cy="235" r="13" fill="none" stroke="#ffcc00" stroke-width="2" />
+                    <circle cx="200" cy="235" r="30" fill="url(#wandGlow)" pointer-events="none" />
+                    <circle cx="200" cy="235" r="12" fill="#fff" opacity="0.4" filter="blur(2px)" />
+                </svg>
+            </div>
+
+            <!-- Credit Line - Bottom Left -->
+            <div class="absolute bottom-2 left-2 text-emerald-300 text-xs md:text-sm font-bold z-50 drop-shadow-md opacity-70 pointer-events-none">
+                יצרה באמצעות בינה מלאכותית: מורן קמיל גלברג, הוראה מותאמת.
+            </div>
+        </div>
+
+        <!-- GAMEOVER VIEW -->
+        <div id="gameover-view" class="hidden w-full h-full flex-col items-center justify-center p-4 relative z-20">
+            <div class="bg-slate-900/90 backdrop-blur-xl p-12 rounded-[50px] shadow-[0_0_60px_rgba(16,185,129,0.3)] w-full max-w-xl text-center border border-emerald-500/50 relative z-20">
+                <div class="text-7xl mb-6 drop-shadow-[0_0_30px_rgba(255,255,255,0.8)]">🧚‍♀️✨</div>
+                <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-300 mb-4 drop-shadow-lg">הקסם הושלם!</h1>
+                <p class="text-2xl text-emerald-200 font-bold mb-10 opacity-90">תפסת המון פעלים בזמן הנכון!</p>
+                
+                <div class="bg-slate-800/80 p-8 rounded-3xl mb-10 border border-slate-700 shadow-inner">
+                    <h2 class="text-2xl font-bold text-emerald-400 mb-4">הניקוד הסופי שלך:</h2>
+                    <div id="final-score" class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">
+                        0
+                    </div>
+                </div>
+
+                <button onclick="goToMenu()" class="w-full bg-gradient-to-r from-green-400 to-emerald-400 hover:from-green-300 hover:to-emerald-300 text-slate-900 text-3xl font-black py-5 rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.4)] transform transition hover:scale-[1.03] active:scale-95">
+                    לשחק שוב! 🔄
+                </button>
+            </div>
+
+            <div class="absolute bottom-4 text-center text-emerald-300 text-sm md:text-base font-bold z-50 drop-shadow-md opacity-90">
+                יצרה באמצעות בינה מלאכותית: מורן קמיל גלברג, הוראה מותאמת.
+            </div>
+        </div>
+
+    </div>
+
+    <!-- GAME LOGIC SCRIPT -->
+    <script>
+        // --- Verbs Database ---
+        const VERBS_DB = {
+            'עבר': [
+                'הלך', 'אכל', 'שיחק', 'ישנה', 'רקדנו', 'כתבתם', 'קפץ', 'שמרנו', 
+                'ציירת', 'קראו', 'שמע', 'דיברנו', 'נסע', 'חלמת', 'שרנו', 'ברח', 'צחקנו', 'בכה'
+            ],
+            'הווה': [
+                'הולך', 'אוכלת', 'משחקים', 'ישנות', 'רוקד', 'כותב', 'קופצת', 'שומרים', 
+                'מצייר', 'קוראות', 'שומע', 'מדברים', 'נוסעים', 'חולמת', 'שרים', 'בורחת', 'צוחק', 'בוכה'
+            ],
+            'עתיד': [
+                'אלך', 'תאכל', 'ישחק', 'נישן', 'תרקדו', 'יכתבו', 'אקפוץ', 'נשמור', 
+                'תציירי', 'יקראו', 'אשמע', 'נדבר', 'ניסע', 'תחלום', 'אשיר', 'נברח', 'יצחקו', 'תבכה'
+            ]
+        };
+
+        // --- Global State ---
+        let speedSetting = 'medium';
+        let durationMinutes = 3;
+        let isMuted = false;
+        
+        let score = 0;
+        let combo = 0;
+        let timeLeft = 0;
+        let targetTimer = 25;
+        let currentTarget = '';
+        
+        let gameInterval = null;
+        let targetInterval = null;
+        let spawnInterval = null;
+        
+        let audioCtx = null;
+
+        // --- Initialize Visuals ---
+        function initVisuals() {
+            // Generate Fireflies
+            const firefliesContainer = document.getElementById('fireflies-container');
+            for(let i=0; i<40; i++) {
+                const fly = document.createElement('div');
+                fly.className = 'absolute rounded-full bg-yellow-200';
+                const size = Math.random() * 4 + 2;
+                fly.style.width = size + 'px';
+                fly.style.height = size + 'px';
+                fly.style.top = (Math.random() * 100) + '%';
+                fly.style.left = (Math.random() * 100) + '%';
+                fly.style.boxShadow = '0 0 8px 2px rgba(255, 255, 150, 0.8)';
+                fly.style.animation = `glowFirefly ${Math.random() * 3 + 2}s infinite alternate ease-in-out`;
+                fly.style.animationDelay = (Math.random() * 2) + 's';
+                firefliesContainer.appendChild(fly);
+            }
+
+            // Generate Butterflies
+            const bContainer = document.getElementById('butterflies-container');
+            const positions = [
+                {top: '25%', left: '10%', delay: '0s'},
+                {top: '45%', right: '15%', delay: '3s'},
+                {top: '15%', right: '35%', delay: '6s'},
+                {top: '65%', left: '20%', delay: '1.5s'},
+                {top: '80%', right: '5%', delay: '4.5s'},
+                {top: '35%', left: '40%', delay: '2.5s'},
+            ];
+            const butterflySVG = `
+                <svg width="40" height="40" viewBox="0 0 100 100" style="animation: flutter 0.5s infinite alternate ease-in-out">
+                    <path d="M50 50 C20 0, 0 20, 45 55 C0 80, 20 100, 50 50" fill="url(#wingGrad1)" opacity="0.85" />
+                    <path d="M50 50 C80 0, 100 20, 55 55 C100 80, 80 100, 50 50" fill="url(#wingGrad2)" opacity="0.85" />
+                    <ellipse cx="50" cy="50" rx="3" ry="18" fill="#1a0d00" />
+                    <defs>
+                        <linearGradient id="wingGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ff99cc" />
+                            <stop offset="100%" stop-color="#99ccff" />
+                        </linearGradient>
+                        <linearGradient id="wingGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#ff99cc" />
+                            <stop offset="100%" stop-color="#99ccff" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            `;
+
+            positions.forEach(pos => {
+                const bDiv = document.createElement('div');
+                bDiv.className = 'absolute pointer-events-none z-10';
+                bDiv.style.top = pos.top;
+                if(pos.left) bDiv.style.left = pos.left;
+                if(pos.right) bDiv.style.right = pos.right;
+                bDiv.style.animation = 'floatButterfly 20s infinite alternate ease-in-out';
+                bDiv.style.animationDelay = pos.delay;
+                bDiv.innerHTML = butterflySVG;
+                bContainer.appendChild(bDiv);
+            });
+        }
+        initVisuals();
+
+        // --- Audio Functions ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('mute-btn').innerText = isMuted ? '🔇' : '🔊';
+        }
+
+        function playPopSound(comboMultiplier = 1) {
+            if (!audioCtx || isMuted) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            const baseFreq = 800 + (comboMultiplier * 100);
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            
+            osc.start(audioCtx.currentTime);
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function playWrongSound() {
+            if (!audioCtx || isMuted) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+            
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            
+            osc.start(audioCtx.currentTime);
+            osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playMagicChime() {
+            if (!audioCtx || isMuted) return;
+            const notes = [400, 500, 600, 800];
+            const t = audioCtx.currentTime;
+            
+            notes.forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+                
+                gainNode.gain.setValueAtTime(0, t + i * 0.1);
+                gainNode.gain.linearRampToValueAtTime(0.3, t + i * 0.1 + 0.05);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, t + i * 0.1 + 0.5);
+                
+                osc.start(t + i * 0.1);
+                osc.stop(t + i * 0.1 + 0.6);
+            });
+        }
+
+        // --- Menu Logic ---
+        function setSpeed(newSpeed) {
+            speedSetting = newSpeed;
+            const speeds = ['slow', 'medium', 'fast'];
+            speeds.forEach(s => {
+                const btn = document.getElementById('speed-' + s);
+                if (s === newSpeed) {
+                    btn.className = "speed-btn flex-1 py-4 rounded-xl font-bold transition-all shadow-sm text-lg bg-emerald-500 text-slate-900 transform scale-105 shadow-[0_0_15px_rgba(16,185,129,0.5)]";
+                } else {
+                    btn.className = "speed-btn flex-1 py-4 rounded-xl font-bold transition-all shadow-sm text-lg bg-slate-700 text-emerald-100 hover:bg-slate-600 border border-slate-600";
+                }
+            });
+        }
+
+        function updateDurationLabel() {
+            durationMinutes = parseInt(document.getElementById('duration-input').value);
+            document.getElementById('duration-label').innerText = durationMinutes + (durationMinutes === 1 ? ' דקה' : ' דקות');
+        }
+
+        function showView(viewId) {
+            document.getElementById('menu-view').classList.add('hidden');
+            document.getElementById('menu-view').classList.remove('flex');
+            document.getElementById('playing-view').classList.add('hidden');
+            document.getElementById('playing-view').classList.remove('flex');
+            document.getElementById('gameover-view').classList.add('hidden');
+            document.getElementById('gameover-view').classList.remove('flex');
+
+            const v = document.getElementById(viewId);
+            v.classList.remove('hidden');
+            v.classList.add('flex');
+        }
+
+        function goToMenu() {
+            showView('menu-view');
+        }
+
+        // --- Game Flow ---
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function updateHUD() {
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('time-display').innerText = 'זמן: ' + formatTime(timeLeft);
+            
+            const comboEl = document.getElementById('combo-display-container');
+            const comboText = document.getElementById('combo-display');
+            
+            if(combo > 1) {
+                comboEl.classList.remove('hidden');
+                comboText.innerText = 'רצף: x' + Math.min(combo, 5) + ' 🔥';
+                if(combo >= 3) {
+                    comboEl.classList.add('combo-active');
+                } else {
+                    comboEl.classList.remove('combo-active');
+                }
+            } else {
+                comboEl.classList.add('hidden');
+                comboEl.classList.remove('combo-active');
+            }
+        }
+
+        function changeTarget() {
+            const tenses = Object.keys(VERBS_DB);
+            let newTarget = tenses[Math.floor(Math.random() * tenses.length)];
+            if (tenses.length > 1 && newTarget === currentTarget) {
+                newTarget = tenses.find(t => t !== currentTarget) || newTarget;
+            }
+            currentTarget = newTarget;
+            combo = 0; // Reset combo on target change
+            document.getElementById('target-display').innerText = currentTarget;
+            playMagicChime();
+            updateHUD();
+        }
+
+        function startGame() {
+            initAudio();
+            score = 0;
+            combo = 0;
+            timeLeft = durationMinutes * 60;
+            targetTimer = 25;
+            document.getElementById('bubbles-container').innerHTML = ''; // Clear bubbles
+            
+            changeTarget();
+            updateHUD();
+            updateTargetBar();
+            
+            showView('playing-view');
+
+            clearInterval(gameInterval);
+            clearInterval(targetInterval);
+            clearInterval(spawnInterval);
+
+            gameInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    stopGame(false);
+                } else {
+                    updateHUD();
+                }
+            }, 1000);
+
+            targetInterval = setInterval(() => {
+                targetTimer--;
+                if (targetTimer <= 0) {
+                    targetTimer = 25;
+                    changeTarget();
+                }
+                updateTargetBar();
+            }, 1000);
+
+            let spawnRate = 600; 
+            let floatDuration = 10; 
+            if (speedSetting === 'slow') {
+                spawnRate = 900; floatDuration = 16;  
+            } else if (speedSetting === 'fast') {
+                spawnRate = 450; floatDuration = 7.5; 
+            }
+
+            spawnInterval = setInterval(() => {
+                spawnBubble(floatDuration);
+            }, spawnRate);
+        }
+
+        function updateTargetBar() {
+            const bar = document.getElementById('target-bar');
+            bar.style.width = `${(targetTimer / 25) * 100}%`;
+            if (targetTimer < 6) {
+                bar.classList.remove('bg-emerald-400');
+                bar.classList.add('bg-rose-500');
+            } else {
+                bar.classList.add('bg-emerald-400');
+                bar.classList.remove('bg-rose-500');
+            }
+        }
+
+        function stopGame(forceMenu = false) {
+            clearInterval(gameInterval);
+            clearInterval(targetInterval);
+            clearInterval(spawnInterval);
+            document.getElementById('bubbles-container').innerHTML = '';
+            
+            if (forceMenu) {
+                showView('menu-view');
+            } else {
+                document.getElementById('final-score').innerText = score;
+                showView('gameover-view');
+            }
+        }
+
+        // --- Bubbles Logic ---
+        function spawnBubble(baseDuration) {
+            const tenses = Object.keys(VERBS_DB);
+            const isTarget = Math.random() > 0.5;
+            const selectedTense = isTarget ? currentTarget : tenses[Math.floor(Math.random() * tenses.length)];
+            
+            const words = VERBS_DB[selectedTense];
+            const selectedWord = words[Math.floor(Math.random() * words.length)];
+            
+            const size = Math.floor(Math.random() * 60) + 120; 
+            const startXOffset = (Math.random() * 20 - 10); 
+            const startBottom = Math.floor(Math.random() * 20) + 10; 
+            const spreadDistance = (Math.random() * 200 - 100); 
+            const actualDuration = baseDuration + (Math.random() * 4 - 2);
+            
+            const hue = Math.floor(Math.random() * 360);
+            const pastelColor = `hsla(${hue}, 80%, 80%, 0.55)`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'absolute bubble-anim bubble-glass flex items-center justify-center cursor-pointer text-center select-none pointer-events-auto';
+            bubble.style.left = `calc(50% + ${startXOffset}vw)`;
+            bubble.style.marginLeft = `calc(-${size}px / 2)`;
+            bubble.style.width = `${size}px`;
+            bubble.style.height = `${size}px`;
+            bubble.style.animationDuration = `${actualDuration}s`;
+            bubble.style.bottom = `${startBottom}px`;
+            bubble.style.setProperty('--start-x', `${startXOffset}vw`);
+            bubble.style.setProperty('--end-x', `${spreadDistance}vw`);
+            bubble.style.setProperty('--bubble-color', pastelColor);
+            bubble.dataset.popped = "false";
+            bubble.dataset.tense = selectedTense;
+
+            // Inner decorations
+            bubble.innerHTML = `
+                <div class="absolute top-[8%] left-[12%] w-[40%] h-[40%] bg-white rounded-full opacity-70 filter blur-[1px] transform -rotate-45"></div>
+                <div class="absolute bottom-[10%] right-[15%] w-[20%] h-[20%] bg-white rounded-full opacity-40 filter blur-[2px]"></div>
+                <span class="font-bold text-slate-900 leading-tight drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] z-10 p-2 break-words" 
+                      style="font-size: min(2.5rem, calc(${size}px * 0.35))"> 
+                  ${selectedWord}
+                </span>
+            `;
+
+            const clickHandler = (e) => handleBubbleClick(e, bubble);
+            bubble.addEventListener('mousedown', clickHandler);
+            bubble.addEventListener('touchstart', clickHandler);
+
+            document.getElementById('bubbles-container').appendChild(bubble);
+
+            setTimeout(() => {
+                if (bubble && bubble.dataset.popped === "false" && bubble.parentNode) {
+                    bubble.remove();
+                }
+            }, actualDuration * 1000);
+        }
+
+        function showFloatingScore(text, x, y, color) {
+            const floatEl = document.createElement('div');
+            floatEl.className = 'floating-score';
+            floatEl.style.left = x + 'px';
+            floatEl.style.top = y + 'px';
+            floatEl.style.color = color;
+            floatEl.innerText = text;
+            
+            document.body.appendChild(floatEl);
+            
+            setTimeout(() => {
+                if (floatEl.parentNode) floatEl.remove();
+            }, 1000);
+        }
+
+        function handleBubbleClick(e, bubble) {
+            e.preventDefault(); // Prevent double firing
+            
+            if (bubble.dataset.popped === "true") return;
+            bubble.dataset.popped = "true";
+            
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            const rect = bubble.getBoundingClientRect();
+            const containerWidth = window.innerWidth;
+            const containerHeight = window.innerHeight;
+            const animX = rect.left + rect.width / 2 - containerWidth / 2;
+            const animY = rect.top + rect.height / 2 - containerHeight + (containerHeight * 0.22); 
+
+            // Convert bubble to pop state
+            bubble.className = 'absolute bubble-pop flex items-center justify-center font-black text-6xl z-40';
+            bubble.style.left = '50%';
+            bubble.style.bottom = '0px';
+            bubble.style.marginLeft = '0px';
+            bubble.style.setProperty('--current-x', `${animX}px`);
+            bubble.style.setProperty('--current-y', `${animY}px`);
+            bubble.innerHTML = '<span class="drop-shadow-[0_0_20px_rgba(255,255,255,1)]">✨</span>';
+
+            const tense = bubble.dataset.tense;
+
+            if (tense === currentTarget) {
+                combo++;
+                const multiplier = Math.min(combo, 5); 
+                const points = 10 * multiplier;
+                
+                playPopSound(multiplier);
+                score += points;
+                showFloatingScore(`+${points}`, clientX, clientY, '#34d399');
+            } else {
+                playWrongSound();
+                combo = 0;
+                score = Math.max(0, score - 5);
+                showFloatingScore(`-5`, clientX, clientY, '#f87171'); 
+            }
+            
+            updateHUD();
+
+            // Remove element after pop animation
+            setTimeout(() => {
+                if (bubble.parentNode) bubble.remove();
+            }, 300);
+        }
+    </script>
+</body>
+</html>
